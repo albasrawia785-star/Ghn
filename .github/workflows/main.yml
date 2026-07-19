@@ -22,14 +22,13 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      # 3. فك ضغط الملف المضغوط
+      # 3. fك ضغط الملف المضغوط
       - name: Unzip project files
         run: unzip *.zip -d project_dir
 
-      # 4. إصلاح التوقيع وضبط إعدادات الجافا الصامتة لحل مشكلة KSP وبناء الـ APK
-      - name: Fix Google Services and Build APK
+      # 4. توليد الملف المفقود وإصلاح التوقيع وبناء الـ APK
+      - name: Inject Missing Repository and Build APK
         env:
-          # إعدادات صارمة للجافا لمنع تعارض الواجهات الرسومية مع KSP و Kotlin Compiler
           _JAVA_OPTIONS: "-Djava.awt.headless=true"
           GRADLE_OPTS: "-Djava.awt.headless=true -Dorg.gradle.jvmargs=-Djava.awt.headless=true"
         run: |
@@ -40,6 +39,59 @@ jobs:
             exit 1
           fi
           cd "$TARGET_DIR"
+          
+          echo "🛠️ إنشاء ملف الكلاس المفقود POSRepository.kt تلقائياً..."
+          mkdir -p app/src/main/java/com/example/data
+          cat << 'EOF' > app/src/main/java/com/example/data/POSRepository.kt
+          package com.example.data
+
+          import kotlinx.coroutines.flow.Flow
+
+          class POSRepository(private val posDao: POSDao) {
+              val allCategories: Flow<List<Category>> = posDao.getAllCategories()
+              val allProducts: Flow<List<Product>> = posDao.getAllProducts()
+              val allInvoices: Flow<List<Invoice>> = posDao.getAllInvoices()
+              val allShiftLogs: Flow<List<ShiftLog>> = posDao.getAllShiftLogs()
+              val allInvoiceItems: Flow<List<InvoiceItem>> = posDao.getAllInvoiceItems()
+
+              suspend fun prepopulateIfEmpty() {
+                  // يمكن تركها فارغة أو كتابة كود افتراضي بداخلها لاحقاً
+              }
+
+              suspend fun createInvoice(invoice: Invoice, items: List<InvoiceItem>): Long {
+                  val id = posDao.insertInvoice(invoice)
+                  items.forEach { 
+                      posDao.insertInvoiceItem(it.copy(invoiceNumber = id))
+                  }
+                  return id
+              }
+
+              suspend fun insertCategory(category: Category) = posDao.insertCategory(category)
+              suspend fun updateCategory(category: Category) = posDao.updateCategory(category)
+              suspend fun deleteCategory(category: Category) = posDao.deleteCategory(category)
+
+              suspend fun insertProduct(product: Product) = posDao.insertProduct(product)
+              suspend fun updateProduct(product: Product) = posDao.updateProduct(product)
+              suspend fun deleteProduct(product: Product) = posDao.deleteProduct(product)
+
+              suspend fun insertShiftLog(shiftLog: ShiftLog) = posDao.insertShiftLog(shiftLog)
+              suspend fun updateShiftLog(shiftLog: ShiftLog) = posDao.updateShiftLog(shiftLog)
+              suspend fun deleteShiftLog(shiftLog: ShiftLog) = posDao.deleteShiftLog(shiftLog)
+
+              suspend fun deleteInvoice(invoice: Invoice) {
+                  posDao.deleteInvoice(invoice)
+                  posDao.deleteInvoiceItemsByInvoiceNo(invoice.invoiceNumber)
+              }
+
+              suspend fun clearAllData() {
+                  posDao.clearCategories()
+                  posDao.clearProducts()
+                  posDao.clearInvoices()
+                  posDao.clearInvoiceItems()
+                  posDao.clearShiftLogs()
+              }
+          }
+          EOF
           
           echo "🛠️ توليد ملفات gradlew..."
           gradle wrapper
@@ -56,7 +108,7 @@ jobs:
           echo "🚀 بدء بناء الـ APK..."
           ./gradlew assembleDebug --no-daemon -Djava.awt.headless=true
 
-      # 5. رفع ملف الـ APK الناتج لكي تقوم بتحميله
+      # 5. رفع ملف الـ APK الناتج لتحميله
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
