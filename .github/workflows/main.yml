@@ -26,10 +26,12 @@ jobs:
       - name: Unzip project files
         run: unzip *.zip -d project_dir
 
-      # 4. إصلاح التوقيع واسم حزمة جوجل وبناء الـ APK
+      # 4. إصلاح التوقيع وضبط إعدادات الجافا الصامتة لحل مشكلة KSP وبناء الـ APK
       - name: Fix Google Services and Build APK
         env:
+          # إعدادات صارمة للجافا لمنع تعارض الواجهات الرسومية مع KSP و Kotlin Compiler
           _JAVA_OPTIONS: "-Djava.awt.headless=true"
+          GRADLE_OPTS: "-Djava.awt.headless=true -Dorg.gradle.jvmargs=-Djava.awt.headless=true"
         run: |
           # البحث عن مجلد المشروع
           TARGET_DIR=$(find project_dir -name "settings.gradle.kts" -exec dirname {} \;)
@@ -52,7 +54,7 @@ jobs:
           fi
 
           echo "🚀 بدء بناء الـ APK..."
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon -Djava.awt.headless=true
 
       # 5. رفع ملف الـ APK الناتج لكي تقوم بتحميله
       - name: Upload APK Artifact
